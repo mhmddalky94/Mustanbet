@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --font-amiri: 'Amiri', serif;
+  --font-cairo: 'Cairo', sans-serif;
+  --color-primary-dark: #0a1510;
+  --color-primary: #122a1f;
+  --color-accent: #d4af37;
+  --color-text-light: #e0e8e4;
+  --color-quran: #22c55e;
+  --color-hadith: #3b82f6;
+  --color-sahaba: #eab308;
+  --color-tabiin: #f97316;
+}
+
+body {
+  font-family: var(--font-cairo);
+}
+
+.font-amiri {
+  font-family: var(--font-amiri);
+}

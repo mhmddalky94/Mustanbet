@@ -1,0 +1,8 @@
+{
+  "name": "Remix Al-Mustanbit",
+  "description": "A visual platform simplifying Islamic topics through Quranic API data and AI-powered insights for modern, fast-paced readers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
