@@ -1,10 +1,12 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
 async function startServer() {
   const app = express();
+  const server = http.createServer(app);
   const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
@@ -66,88 +68,42 @@ async function startServer() {
     }
   });
 
-  // API to fetch Quran Token (Optional OAuth2 for Quran Foundation)
-  app.post("/api/quran/token", async (req, res) => {
-    try {
-      const clientId = (req.headers["x-quran-client-id"] as string) || process.env.QURAN_CLIENT_ID;
-      const clientSecret = (req.headers["x-quran-client-secret"] as string) || process.env.QURAN_CLIENT_SECRET;
-
-      if (!clientId || !clientSecret) {
-        return res.status(400).json({ error: "Quran API credentials missing." });
-      }
-
-      const params = new URLSearchParams();
-      params.append("grant_type", "client_credentials");
-      params.append("client_id", clientId);
-      params.append("client_secret", clientSecret);
-      params.append("scope", "content");
-
-      const response = await fetch("https://oauth2.quran.foundation/oauth2/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: params.toString(),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Failed to get token: ${errText}`);
-      }
-
-      const data = await response.json();
-      res.json(data);
-    } catch (error: any) {
-      console.error("Quran Token Error:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch Quran token." });
-    }
-  });
-
-  // API to fetch Verse (Supports both authenticated Quran Foundation and open free tier)
+  // API to fetch Verse (Completely open, keyless Quran API via api.alquran.cloud / quran.com)
   app.get("/api/quran/verse/:key", async (req, res) => {
     try {
-      const token = req.headers["x-quran-token"] as string;
-      const clientId = (req.headers["x-quran-client-id"] as string) || process.env.QURAN_CLIENT_ID;
       const key = req.params.key;
 
-      // 1. Try Quran Foundation OAuth if credentials exist
-      if (token && clientId) {
-        try {
-          const response = await fetch(`https://apis.quran.foundation/content/api/v4/verses/by-key/${key}`, {
-            method: "GET",
-            headers: {
-              "x-auth-token": token,
-              "x-client-id": clientId,
-              "Accept": "application/json",
-            },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const text = data.data?.text?.standard || data.data?.text?.uthmani || data.verse?.text || data.text;
-            if (text) {
-              return res.json({ text, source: "quran-foundation", ...data });
-            }
+      // 1. Fetch from api.alquran.cloud (completely open & keyless)
+      try {
+        const alquranRes = await fetch(`https://api.alquran.cloud/v1/ayah/${key}/editions/quran-uthmani`, {
+          headers: { Accept: "application/json" },
+        });
+        if (alquranRes.ok) {
+          const data = await alquranRes.json();
+          const ayahData = data.data?.[0] || data.data;
+          const text = ayahData?.text;
+          if (text) {
+            return res.json({ text, source: "alquran.cloud" });
           }
-        } catch (e) {
-          console.warn("Quran Foundation OAuth attempt failed, falling back to public endpoint:", e);
+        }
+      } catch (e) {
+        console.warn("api.alquran.cloud fetch failed, trying fallback:", e);
+      }
+
+      // 2. Fallback to Quran.com free public API
+      const freeResponse = await fetch(`https://api.quran.com/api/v4/verses/by_key/${key}?fields=text_uthmani`, {
+        headers: { Accept: "application/json" },
+      });
+
+      if (freeResponse.ok) {
+        const freeData = await freeResponse.json();
+        const verseText = freeData.verse?.text_uthmani || freeData.verse?.text;
+        if (verseText) {
+          return res.json({ text: verseText, source: "quran.com" });
         }
       }
 
-      // 2. Fallback to Quran.com free public official API
-      const freeResponse = await fetch(`https://api.quran.com/api/v4/verses/by_key/${key}?fields=text_uthmani`, {
-        headers: {
-          "Accept": "application/json",
-        },
-      });
-
-      if (!freeResponse.ok) {
-        throw new Error(`Failed to fetch verse ${key} from public Quran API`);
-      }
-
-      const freeData = await freeResponse.json();
-      const verseText = freeData.verse?.text_uthmani || freeData.verse?.text;
-      return res.json({ text: verseText, source: "quran-public", ...freeData });
+      throw new Error(`Failed to fetch verse ${key} from keyless Quran APIs`);
     } catch (error: any) {
       console.error("Quran Verse Error:", error);
       res.status(500).json({ error: error.message || "Failed to fetch verse." });
@@ -157,7 +113,10 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === "true" ? false : { server },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -169,7 +128,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

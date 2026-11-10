@@ -26,7 +26,7 @@ type CategoryFilter = 'all' | 'quran' | 'hadith' | 'salaf';
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('mustanbit_settings');
-    return saved ? JSON.parse(saved) : { geminiApiKey: '', quranClientId: '', quranClientSecret: '' };
+    return saved ? JSON.parse(saved) : { geminiApiKey: '' };
   });
   
   const [showSettings, setShowSettings] = useState(false);

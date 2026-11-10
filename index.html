@@ -18,6 +18,16 @@
     <div class="fixed inset-0 pointer-events-none opacity-[0.03]" style="background-image: url('data:image/svg+xml;utf8,<svg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'><g fill=\'none\' fill-rule=\'evenodd\'><g fill=\'%23ffffff\' fill-opacity=\'1\'><path d=\'M30 0l4 12 12-4-8 10 10 8-12 4 4 12-10-8-8 10-4-12-12 4 8-10-10-8 12-4-4-12 10 8z\'/></g></g></svg>'); background-size: 60px 60px;"></div>
     
     <div id="root" class="relative z-10"></div>
+    <script>
+      // Prevent Vite HMR WebSocket connection drop errors from surfacing in iframe/preview proxies
+      window.addEventListener('unhandledrejection', function(event) {
+        var msg = (event && event.reason && event.reason.message) || '';
+        var stack = (event && event.reason && event.reason.stack) || '';
+        if (msg.indexOf('WebSocket') !== -1 || stack.indexOf('@vite/client') !== -1) {
+          event.preventDefault();
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

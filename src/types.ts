@@ -21,6 +21,4 @@ export interface TopicAnalysis {
 
 export interface AppSettings {
   geminiApiKey: string;
-  quranClientId: string;
-  quranClientSecret: string;
 }

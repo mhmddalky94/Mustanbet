@@ -151,62 +151,59 @@ export async function fetchTopicAnalysis(
     throw new Error("فشل في معالجة استجابة الاستنباط");
   }
 
-  // Fetch verified Quran verses in parallel
+  // Fetch verified Quran verses in parallel using open keyless Quran APIs
   const quranCards = analysis.cards.filter((card) => card.type === "quran" && card.quranKey);
   if (quranCards.length > 0) {
     onProgress?.(`يوثّق الآيات القرآنية (${quranCards.length} آيات) بالرسم العثماني المعتمد...`);
-    
-    let token = "";
-    if (settings.quranClientId && settings.quranClientSecret) {
-      try {
-        const tokenRes = await fetch("/api/quran/token", {
-          method: "POST",
-          headers: {
-            "x-quran-client-id": settings.quranClientId,
-            "x-quran-client-secret": settings.quranClientSecret,
-          },
-        });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          token = tokenData.access_token || "";
-        }
-      } catch (err) {
-        console.warn("Quran OAuth token error, will fallback to public API:", err);
-      }
-    }
 
     await Promise.allSettled(
       quranCards.map(async (card) => {
         try {
-          // 1. Try server endpoint
           let uthmaniText = "";
-          try {
-            const verseHeaders: Record<string, string> = {};
-            if (token) verseHeaders["x-quran-token"] = token;
-            if (settings.quranClientId) verseHeaders["x-quran-client-id"] = settings.quranClientId;
 
-            const verseRes = await fetch(`/api/quran/verse/${card.quranKey}`, {
-              headers: verseHeaders,
-            });
+          // 1. Try backend endpoint
+          try {
+            const verseRes = await fetch(`/api/quran/verse/${card.quranKey}`);
             if (verseRes.ok) {
               const verseData = await verseRes.json();
-              uthmaniText = verseData.text || verseData.verse?.text_uthmani || verseData.verse?.text;
+              uthmaniText = verseData.text || verseData.verse?.text_uthmani;
             }
           } catch {
-            // Server endpoint not reachable
+            // Server endpoint not reachable (e.g., client-only deployment)
           }
 
-          // 2. Direct public API fallback
+          // 2. Direct keyless open API: api.alquran.cloud
           if (!uthmaniText) {
-            const publicRes = await fetch(
-              `https://api.quran.com/api/v4/verses/by_key/${card.quranKey}?language=ar&words=false&fields=text_uthmani`
-            );
-            if (publicRes.ok) {
-              const pData = await publicRes.json();
-              uthmaniText = pData.verse?.text_uthmani || pData.verse?.text;
+            try {
+              const alquranRes = await fetch(
+                `https://api.alquran.cloud/v1/ayah/${card.quranKey}/editions/quran-uthmani`
+              );
+              if (alquranRes.ok) {
+                const aqData = await alquranRes.json();
+                const item = aqData.data?.[0] || aqData.data;
+                uthmaniText = item?.text;
+              }
+            } catch {
+              // Ignore network error on fallback
             }
           }
 
+          // 3. Second open fallback: api.quran.com
+          if (!uthmaniText) {
+            try {
+              const publicRes = await fetch(
+                `https://api.quran.com/api/v4/verses/by_key/${card.quranKey}?language=ar&words=false&fields=text_uthmani`
+              );
+              if (publicRes.ok) {
+                const pData = await publicRes.json();
+                uthmaniText = pData.verse?.text_uthmani || pData.verse?.text;
+              }
+            } catch {
+              // Ignore network error on fallback
+            }
+          }
+
+          // If found from trusted open Quran APIs, update text; otherwise keep Gemini's generated vowelled text
           if (uthmaniText) {
             card.originalText = uthmaniText;
           }
